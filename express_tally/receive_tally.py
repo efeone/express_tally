@@ -751,10 +751,10 @@ def create_journal_entry(data):
                     row['account'] = get_formatted_value(row.get('account'))
                     if not frappe.db.exists('Account', row.get('account')):
                         account_name = row.get('account')[:abbr_len]
-                        if get_employee_account(account_name):
+                        if get_employee_id_from_account(account_name):
                             row['account'] = employee_payable_account
                             row['party_type'] = 'Employee'
-                            row['party'] = get_employee_account(account_name)
+                            row['party'] = get_employee_id_from_account(account_name)
                         elif frappe.db.exists('Customer', account_name):
                             row['account'] = get_party_account('Customer', account_name)
                             row['party_type'] = 'Customer'
@@ -867,13 +867,41 @@ def create_failed_record(data, message):
         doc.exception = message
         doc.insert()
 
-def get_employee_account(account_name):
+def get_employee_id_from_account(account_name):
     '''
         Method to check wether the Account is associcated with Employee
     '''
     matches = re.findall(r"\((.*?)\)", account_name)
+    create_missing_employee = frappe.db.get_single_value('Express Tally Settings', 'default_payable_account')
     if matches:
-        employee_id = matches[0]
-        if frappe.db.exists('Employee', employee_id.upper()):
-            return employee_id.upper()
+        employee_id = matches[0].upper()
+        if frappe.db.exists('Employee', employee_id):
+            return employee_id
+        else:
+            if create_missing_employee and employee_id[:2]=='MB':
+                employee_name = account_name.split('(')[0].strip()
+                return create_employee(employee_name, employee_id)
     return False
+
+def create_employee(employee_name, employee_id):
+    '''
+        Method to create Employee with default values
+    '''
+    if frappe.db.exists('Employee', employee_id):
+        return employee_id
+    default_gender = frappe.db.get_single_value('Express Tally Settings', 'default_gender')
+    default_date_of_birth = frappe.db.get_single_value('Express Tally Settings', 'default_date_of_birth')
+    default_date_of_joining = frappe.db.get_single_value('Express Tally Settings', 'default_date_of_joining')
+    employee_doc = frappe.new_doc('Employee')
+    employee_doc.first_name = employee_name
+    employee_doc.employee = employee_id
+    employee_doc.gender = default_gender
+    employee_doc.date_of_birth = default_date_of_birth
+    employee_doc.date_of_joining = default_date_of_joining
+    employee_doc.flags.ignore_mandatory = 1
+    employee_doc.flags.ignore_permissions = 1
+    employee_doc.save()
+    if employee_doc.name != employee_id:
+        #Renaming doc to set Employee ID
+        frappe.rename_doc('Employee', employee_doc.name, employee_id)
+    return employee_id

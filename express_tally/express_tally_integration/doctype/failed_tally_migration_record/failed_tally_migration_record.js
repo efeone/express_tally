@@ -34,8 +34,7 @@ function create_failed_record(frm) {
         freeze: true,
         callback: (r) => {
             if (r.message) {
-                frm.set_value('reference_document', r.message)
-                frm.save();
+                frm.reload_doc();
             }
         }
     });

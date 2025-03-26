@@ -30,6 +30,11 @@
   "column_break_xppd",
   "tds_keyword",
   "tds_account",
+  "party_mappings_section",
+  "create_missing_employee",
+  "default_gender",
+  "default_date_of_birth",
+  "default_date_of_joining",
   "mappings_tab",
   "data_mapping_section",
   "item_mappings",
@@ -252,12 +257,45 @@
    "fieldname": "set_docname_as_tally",
    "fieldtype": "Check",
    "label": "Set Docname as Tally"
+  },
+  {
+   "fieldname": "party_mappings_section",
+   "fieldtype": "Section Break",
+   "label": "Party Mappings"
+  },
+  {
+   "default": "0",
+   "fieldname": "create_missing_employee",
+   "fieldtype": "Check",
+   "label": "Create Missing Employee"
+  },
+  {
+   "depends_on": "create_missing_employee",
+   "fieldname": "default_gender",
+   "fieldtype": "Link",
+   "label": "Default Gender",
+   "mandatory_depends_on": "create_missing_employee",
+   "options": "Gender"
+  },
+  {
+   "depends_on": "create_missing_employee",
+   "fieldname": "default_date_of_birth",
+   "fieldtype": "Date",
+   "label": "Default Date of Birth",
+   "mandatory_depends_on": "create_missing_employee"
+  },
+  {
+   "depends_on": "create_missing_employee",
+   "fieldname": "default_date_of_joining",
+   "fieldtype": "Date",
+   "label": "Default Date of Joining",
+   "mandatory_depends_on": "create_missing_employee"
   }
  ],
  "index_web_pages_for_search": 1,
  "issingle": 1,
  "links": [],
- "modified": "2025-03-04 11:56:20.059674",
+ "modified": "2025-03-25 16:12:09.200513",
  "modified_by": "Administrator",
  "module": "Express Tally Integration",
  "name": "Express Tally Settings",
