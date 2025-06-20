@@ -325,7 +325,6 @@ def create_account(customer):
             "account_type": account_type
         }
 
-        # print(req)
         doc = frappe.get_doc(req)
         doc.insert()
 
@@ -385,7 +384,6 @@ def create_contact(customer):
             ],
         }
 
-        # print(req)
         doc = frappe.get_doc(req)
         doc.insert()
 
@@ -435,7 +433,7 @@ def create_address(customer):
                 }
             ]
         }
-        # print(req)
+
         doc = frappe.get_doc(req)
         doc.insert()
 
@@ -516,16 +514,13 @@ def create_hsn(item):
 def voucher():
     payload = json.loads(frappe.request.data)
     vouchers_data = payload['data']
-
     tally_response = []
     idx = 0
-    print("\n\n\n Gettting Data")
-
     for voucher_data in vouchers_data:
-        print("Idx : ", idx)
         idx += 1
         from_date = frappe.db.get_single_value('Express Tally Settings', 'from_date')
         to_date = frappe.db.get_single_value('Express Tally Settings', 'to_date')
+        create_jv_for_purchase = frappe.db.get_single_value('Express Tally Settings', 'create_jv_for_purchase')
         if from_date and to_date and voucher_data.get('posting_date'):
             if not (getdate(from_date) <= getdate(voucher_data.get('posting_date')) and getdate(voucher_data.get('posting_date')) <= getdate(to_date)):
                 tally_response.append(
@@ -535,7 +530,10 @@ def voucher():
             response = create_sales_invoice(voucher_data)
             tally_response.append(response)
         elif voucher_data['doctype'] == 'Purchase Invoice':
-            response = create_purchase_invoice(voucher_data)
+            if create_jv_for_purchase:
+                response = create_purchase_jv(voucher_data)
+            else:
+                response = create_purchase_invoice(voucher_data)
             tally_response.append(response)
         elif voucher_data['doctype'] == 'Journal Entry':
             response = create_journal_entry(voucher_data)
@@ -662,14 +660,16 @@ def create_purchase_invoice(data):
                         # Fetching GST Details and adding as taxes
                         gst_details = get_gst_details(description)
                         if gst_details:
-                            row['charge_type'] = 'On Net Total'
+                            row['account_head'] = tds_payable_account
+                            row['rate'] = 0
                             row['row_id'] = ''
-                            row['rate'] = gst_details.get('tax_rate')
+                            # row['charge_type'] = 'On Net Total'
+                            # row['rate'] = gst_details.get('tax_rate')
                             row['account_head'] = gst_details.get('gst_account_head')
                             taxes.append(row)
                     elif tds_payable_keyword and description == tds_payable_keyword:
                         # Checking for TDS and if any will add to taxes
-                        row['charge_type'] = 'Actual'
+                        # row['charge_type'] = 'Actual'
                         row['account_head'] = tds_payable_account
                         row['rate'] = 0
                         tax_amount = float(row.get('tax_amount')) or 0
@@ -905,3 +905,79 @@ def create_employee(employee_name, employee_id):
         #Renaming doc to set Employee ID
         frappe.rename_doc('Employee', employee_doc.name, employee_id)
     return employee_id
+
+def create_purchase_jv(data):
+    '''
+        Method to create Purchase Invoices
+    '''
+    tally_settings = frappe.get_single('Express Tally Settings')
+    has_data = frappe.db.exists('Journal Entry', { 'tally_voucherno': data.get('tally_voucherno') })
+    set_docname_as_tally = tally_settings.set_docname_as_tally
+    if set_docname_as_tally and not has_data:
+        has_data = frappe.db.exists('Journal Entry', data.get('tally_voucherno'))
+    company_abbr = tally_settings.company_abbr
+    create_missing_account = tally_settings.create_missing_account
+    submit_vouchers = tally_settings.submit_vouchers
+    default_account = tally_settings.default_account
+    default_payable_account = tally_settings.default_payable_account
+    abbr_len = -1 * (len(company_abbr) + 3)
+    tds_payable_keyword = tally_settings.tds_payable_keyword
+    if not has_data:
+        try:
+            doc = frappe.new_doc('Journal Entry')
+            doc.is_purchase_entry = 1
+            doc.voucher_type = 'Journal Entry'
+            doc.company = data.get('company', '')
+            doc.posting_date = data.get('posting_date', '')
+            doc.tally_masterid = data.get('tally_masterid', '')
+            doc.tally_voucherno = data.get('tally_voucherno', '')
+            doc.cheque_no = data.get('bill_no', '')
+            doc.cheque_date = data.get('bill_date', '')
+            doc.user_remark = data.get('remarks', '')
+            supplier = data.get('supplier', '')
+            total_debit = 0
+            total_credit = 0
+            taxes_and_charges = data.get('taxes') or []
+            idx = 0
+            for row in taxes_and_charges:
+                account_head = get_formatted_value(row.get('account_head'))
+                account_name = account_head[:abbr_len]
+                idx+= 1
+                credit = 0
+                debit = 0
+                if account_name != tds_payable_keyword:
+                    debit = row.get('base_tax_amount', 0)
+                    total_debit += debit
+                else:
+                    credit = row.get('base_tax_amount', 0)
+                    if row.get('base_tax_amount', 0)<0:
+                        credit = row.get('base_tax_amount', 0) * -1
+                    total_credit += credit
+                doc.append('accounts', {
+                    'account': account_head,
+                    'credit_in_account_currency': credit,
+                    'debit_in_account_currency': debit,
+                })
+                if not frappe.db.exists('Account', account_head):
+                    if create_missing_account:
+                        create_coa(default_account, account_name)
+            doc.append('accounts', {
+                'account':default_payable_account,
+                'party_type': 'Supplier',
+                'party': supplier,
+                'credit_in_account_currency': total_debit-total_credit,
+            })
+            if set_docname_as_tally and data.get('tally_voucherno'):
+                doc.name = data.get('tally_voucherno')
+            doc.insert()
+            if submit_vouchers:
+                doc.submit()
+            # Removed docname from return to remove updation to tally
+            # response = {'name': data['tally_masterid'], 'docname': doc.name, 'tally_object': 'voucher', 'message': 'Success'}
+            response = {'name': data['tally_masterid'], 'tally_object': 'voucher', 'message': 'Success'}
+        except Exception as e:
+            create_failed_record(doc, str(e))
+            response = {'name': data.get('tally_masterid'), 'tally_voucherno':data.get('tally_voucherno'), 'posting_date':data.get('posting_date'), 'tally_object': 'voucher', 'message': str(e)}
+    else:
+        response = {'name': data['tally_masterid'], 'docname': has_data, 'tally_object': 'voucher', 'message': 'Already Exists'}
+    return response

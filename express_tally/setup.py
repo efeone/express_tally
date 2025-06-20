@@ -102,6 +102,14 @@ def get_journal_entry_custom_fields():
 				"insert_after": "tally_masterid",
 				"read_only": 1,
 				"no_copy": 1
+			},
+			{
+				"fieldname": "is_purchase_entry",
+				"fieldtype": "Check",
+				"label": "Is Purchase Entry",
+				"insert_after": "tally_voucherno",
+				"read_only": 1,
+				"no_copy": 1
 			}
 		]
 	}

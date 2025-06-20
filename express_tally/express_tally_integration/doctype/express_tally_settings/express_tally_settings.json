@@ -10,6 +10,7 @@
   "to_date",
   "submit_vouchers",
   "set_docname_as_tally",
+  "create_jv_for_purchase",
   "column_break_hzxn",
   "company",
   "company_abbr",
@@ -290,12 +291,18 @@
    "fieldtype": "Date",
    "label": "Default Date of Joining",
    "mandatory_depends_on": "create_missing_employee"
+  },
+  {
+   "default": "0",
+   "fieldname": "create_jv_for_purchase",
+   "fieldtype": "Check",
+   "label": "Create JV for Purchase"
   }
  ],
  "index_web_pages_for_search": 1,
  "issingle": 1,
  "links": [],
- "modified": "2025-03-25 16:12:09.200513",
+ "modified": "2025-06-18 13:58:53.628856",
  "modified_by": "Administrator",
  "module": "Express Tally Integration",
  "name": "Express Tally Settings",
@@ -312,6 +319,7 @@
    "write": 1
   }
  ],
+ "row_format": "Dynamic",
  "sort_field": "modified",
  "sort_order": "DESC",
  "states": [],
